@@ -17,6 +17,8 @@ import javax.validation.ValidationException;
 import javax.validation.constraints.NotBlank;
 
 import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -48,6 +50,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 @Tag(name = "LLM Provider APIs")
 public class LlmProvidersController {
 
+    private static final Logger log = LoggerFactory.getLogger(LlmProvidersController.class);
     private LlmProviderService llmProviderService;
 
     @Resource
@@ -71,6 +74,7 @@ public class LlmProvidersController {
         @ApiResponse(responseCode = "409", description = "Route already existed with the same name."),
         @ApiResponse(responseCode = "500", description = "Internal server error")})
     public ResponseEntity<Response<LlmProvider>> add(@RequestBody LlmProvider certificate) {
+        log.info("current input provider to insert : {}", certificate);
         LlmProvider newProvider = llmProviderService.addOrUpdate(certificate);
         return ControllerUtil.buildResponseEntity(newProvider);
     }
@@ -93,6 +97,7 @@ public class LlmProvidersController {
         @ApiResponse(responseCode = "500", description = "Internal server error")})
     public ResponseEntity<Response<LlmProvider>> put(@PathVariable("name") @NotBlank String name,
         @RequestBody LlmProvider provider) {
+        log.info("current input provider to update : {}", provider);
         if (StringUtils.isNotEmpty(provider.getName())) {
             provider.setName(name);
         } else if (!StringUtils.equals(name, provider.getName())) {

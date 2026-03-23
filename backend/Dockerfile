@@ -1,8 +1,9 @@
-FROM eclipse-temurin:21-jdk
+FROM image.midea.com/midea-middleware/midea-open-jdk:21
 
-RUN apt-get update && apt-get install -y \
-    curl \
- && rm -rf /var/lib/apt/lists/*
+#RUN apt-get update && apt-get install -y \
+#    curl \
+# && rm -rf /var/lib/apt/lists/*
+RUN rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 COPY console/target/higress-console.jar /app
