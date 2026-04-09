@@ -55,11 +55,9 @@ public class MatchRule {
     private static final String ACTIVE_PROVIDER_ID_KEY = "activeProviderId";
 
     public boolean keyEquals(MatchRule rule) {
-        // 匹配domain， ingress二入口，若不同则说明此服务提供者不是同一条
         if (!equalsUnordered(domain, rule.domain) || !equalsUnordered(ingress, rule.ingress)) {
             return false;
         }
-        // 最要紧：active provider id，标识同一个服务提供者
         String thisProviderId = config != null ? (String) config.get(ACTIVE_PROVIDER_ID_KEY) : null;
         String ruleProviderId = rule.config != null ? (String) rule.config.get(ACTIVE_PROVIDER_ID_KEY) : null;
         return Objects.equals(thisProviderId, ruleProviderId);
