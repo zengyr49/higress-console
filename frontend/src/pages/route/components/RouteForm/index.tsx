@@ -1,19 +1,19 @@
-import i18n, { lngs } from '@/i18n';
 import { OptionItem } from '@/interfaces/common';
 import { Consumer, CredentialType } from '@/interfaces/consumer';
 import { DEFAULT_DOMAIN, Domain } from '@/interfaces/domain';
 import { upstreamServiceToString } from '@/interfaces/route';
+import { HistoryButton } from '@/pages/ai/components/RouteForm/Components';
 import { getGatewayDomains, getGatewayServices } from '@/services';
 import { getConsumers } from '@/services/consumer';
+import { getOfficialSiteLink } from '@/utils';
 import { QuestionCircleOutlined, RedoOutlined } from '@ant-design/icons';
 import { useRequest } from 'ahooks';
-import { Checkbox, Form, Input, Select, Switch, Tooltip, Button } from 'antd';
+import { Button, Checkbox, Form, Input, Select, Switch, Tooltip } from 'antd';
 import { uniqueId } from "lodash";
 import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import FactorGroup from '../FactorGroup';
 import KeyValueGroup from '../KeyValueGroup';
-import { HistoryButton } from '@/pages/ai/components/RouteForm/Components';
 
 const { Option } = Select;
 
@@ -38,8 +38,8 @@ const RouteForm: React.FC = forwardRef((props, ref) => {
   const [domainOptions, setDomainOptions] = useState<OptionItem[]>([]);
   const [authConfig_enabled, setAuthConfigEnabled] = useState(false);
   const servicesRef = useRef(new Map());
-  const { data: _services = [] } = useRequest(getGatewayServices);
-  const { data: _domains = [] } = useRequest(getGatewayDomains);
+  const { data: _services = [], refresh: refreshServices } = useRequest(getGatewayServices);
+  const { data: _domains = [], refresh: refreshDomains } = useRequest(getGatewayDomains);
 
   const [consumerList, setConsumerList] = useState<Consumer[]>([]);
   const consumerResult = useRequest(getConsumers, {
@@ -133,10 +133,6 @@ const RouteForm: React.FC = forwardRef((props, ref) => {
     },
   }));
 
-  const lang = i18n.language;
-  const langConfig = lngs.find(l => l.code === lang);
-  const officialSiteLang = langConfig?.officialSiteCode || lang.toLowerCase();
-
   return (
     <Form
       form={form}
@@ -165,15 +161,28 @@ const RouteForm: React.FC = forwardRef((props, ref) => {
       </Form.Item>
       <Form.Item
         label={t('route.routeForm.domain')}
-        name="domains"
       >
-        <Select
-          showSearch
-          allowClear
-          mode="multiple"
-          placeholder={t('route.routeForm.domainSearchPlaceholder')}
-          options={domainOptions}
-        />
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <Form.Item
+            name="domains"
+            noStyle
+          >
+            <Select
+              showSearch
+              allowClear
+              mode="multiple"
+              placeholder={t('route.routeForm.domainSearchPlaceholder')}
+              options={domainOptions}
+              style={{ flex: 1 }}
+            />
+          </Form.Item>
+          <Button
+            style={{ marginLeft: 8 }}
+            onClick={refreshDomains}
+            icon={<RedoOutlined />}
+            aria-label={t('route.routeForm.refreshDomains')}
+          />
+        </div>
       </Form.Item>
       <Form.Item
         label={t('route.routeForm.matchType')}
@@ -312,7 +321,7 @@ const RouteForm: React.FC = forwardRef((props, ref) => {
             <>
               {t('route.routeForm.customConfigs')}
               <Tooltip title={t('route.routeForm.customConfigsTip')}>
-                <a href={`https://higress.io/${officialSiteLang}/docs/user/annotation-use-case`} target="_blank">
+                <a href={`${getOfficialSiteLink("/docs/latest/user/annotation-use-case")}`} target="_blank">
                   <QuestionCircleOutlined className="ant-form-item-tooltip" />
                 </a>
               </Tooltip>
@@ -325,21 +334,34 @@ const RouteForm: React.FC = forwardRef((props, ref) => {
         <Form.Item
           label={t('route.routeForm.targetService')}
           required
-          name="services"
-          rules={[
-            {
-              required: true,
-              message: t('route.routeForm.targetServiceRequired') || '',
-            },
-          ]}
         >
-          <Select
-            mode="multiple"
-            showSearch
-            allowClear
-            placeholder={t('route.routeForm.targetServiceNamedPlaceholder')}
-            options={serviceOptions}
-          />
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <Form.Item
+              name="services"
+              noStyle
+              rules={[
+                {
+                  required: true,
+                  message: t('route.routeForm.targetServiceRequired') || '',
+                },
+              ]}
+            >
+              <Select
+                mode="multiple"
+                showSearch
+                allowClear
+                placeholder={t('route.routeForm.targetServiceNamedPlaceholder')}
+                options={serviceOptions}
+                style={{ flex: 1 }}
+              />
+            </Form.Item>
+            <Button
+              style={{ marginLeft: 8 }}
+              onClick={refreshServices}
+              icon={<RedoOutlined />}
+              aria-label={t('route.routeForm.refreshServices')}
+            />
+          </div>
         </Form.Item>
       </Form.Item>
     </Form>

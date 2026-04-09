@@ -5,7 +5,6 @@
     "commercial": "Higress 企业版",
     "developers": "开发者",
     "blog": "博客",
-    "community": "社区",
     "download": "下载"
   },
   "menu": {
@@ -142,7 +141,9 @@
     "randomGeneration": "随机生成",
     "headerName": "Header 名称",
     "paramName": "参数名称",
-    "deleteSuccess": "删除成功"
+    "deleteSuccess": "删除成功",
+    "search": "查询",
+    "key": "密钥"
   },
   "domain": {
     "columns": {
@@ -272,12 +273,18 @@
         "openaiCustomServerType": "自定义 OpenAI 服务配置方式",
         "openaiCustomService": "自定义 OpenAI 服务",
         "openaiCustomServiceHost": "自定义 OpenAI 服务主机域",
-        "openaiCustomServicePath": "自定义 OpenAI 服务路径"
+        "openaiCustomServicePath": "自定义 OpenAI 服务路径",
+        "zhipuDomain": "自定义智谱 AI 域名",
+        "claudeVersion": "Claude API 版本",
+        "claudeCodeMode": "Claude Code 模式（OAuth 令牌）",
+        "zhipuCodePlanMode": "Code Plan 模式",
+        "vllmCustomUrl": "自定义 vLLM 服务 BaseURL"
       },
       "rules": {
         "tokenRequired": "请输入凭证",
         "typeRequired": "请选择大模型供应商",
         "serviceNameRequired": "请输入服务名称",
+        "serviceNameNoSlash": "服务名称不能包含斜杠（/）",
         "failureThresholdRequired": "请输入最小连续请求失败次数",
         "healthCheckTimeoutRequired": "请输入健康检测请求超时时间（毫秒）",
         "healthCheckIntervalRequired": "请输入健康检测请求发起间隔（毫秒）",
@@ -306,12 +313,21 @@
         "vertexAuthKeyBadRequiredProperty": "Google Cloud 服务账号密钥中缺少必要的属性：{{key}}",
         "geminiSafetyCategoryRequired": "请输入危害类别",
         "geminiSafetyCategoryDuplicated": "存在重复配置的危害类别",
-        "geminiSafetyThresholdRequired": "请输入屏蔽阈值"
+        "geminiSafetyThresholdRequired": "请输入屏蔽阈值",
+        "vllmCustomUrlRequired": "请输入合法的自定义 vLLM 服务 BaseURL",
+        "invalidVllmCustomUrl": "URL 格式不正确：",
+        "vllmCustomUrlMultipleValuesWithIpOnly": "仅支持指定多个使用 IP 和端口的自定义 vLLM 服务 BaseURL",
+        "vllmCustomUrlInconsistentProtocols": "各个自定义 vLLM 服务 BaseURL 所使用的协议不一致",
+        "vllmCustomUrlInconsistentContextPaths": "各个自定义 vLLM 服务 BaseURL 所使用的路径不一致"
       },
       "tooltips": {
         "qwenFileIdsTooltip": "通过文件接口上传至 Dashscope 的文件 ID，其内容将被用做 AI 对话的上下文。",
         "qwenEnableCompatibleTooltip": "启用通义千问兼容模式后，将调用通义千问的 OpenAI 兼容接口，同时对请求/响应不做修改。",
-        "vertexTokenRefreshAheadTooltip": "提前刷新用于访问 Vertex API 的访问密钥的时间，单位为秒。留空表示仅在密钥过期时刷新。"
+        "vertexTokenRefreshAheadTooltip": "提前刷新用于访问 Vertex API 的访问密钥的时间，单位为秒。留空表示仅在密钥过期时刷新。",
+        "zhipuDomainTooltip": "智谱 AI 服务的自定义域名。留空则使用默认域名（open.bigmodel.cn）。国际版请使用 'api.z.ai'。",
+        "zhipuCodePlanModeTooltip": "启用 Code Plan 模式以获得优化的代码生成能力。",
+        "claudeVersionTooltip": "Anthropic API 版本号。默认值：2023-06-01",
+        "claudeCodeModeTooltip": "启用 Claude Code 模式以使用 OAuth 令牌认证（而非 API Key）。运行 'claude setup-token' 获取 OAuth 令牌。"
       },
       "placeholder": {
         "azureServiceUrlPlaceholder": "需包含“/chat/completions”路径和“api-version”查询参数",
@@ -320,7 +336,9 @@
         "openaiCustomServiceHostPlaceholder": "示例：api.openai.com",
         "openaiCustomServicePathPlaceholder": "示例：/v1",
         "qwenDomainPlaceholder": "示例：dashscope-finance.aliyuncs.com",
-        "qwenFileIdsPlaceholder": "示例：file-fe-xxx"
+        "qwenFileIdsPlaceholder": "示例：file-fe-xxx",
+        "zhipuDomainPlaceholder": "示例：api.z.ai（国际版服务）",
+        "vllmCustomUrlPlaceholder": "示例：http://192.168.0.1:8000/v1"
       },
       "openaiServerType": {
         "official": "OpenAI 官方服务",
@@ -612,6 +630,13 @@
     }
   },
   "route": {
+    "search": {
+      "name": "请选择路由名称",
+      "domain": "请选择域名",
+      "routePredicates": "请选择路由条件",
+      "services": "请选择目标服务",
+      "auth": "请选择已授权的服务"
+    },
     "columns": {
       "name": "路由名称",
       "domains": "域名",
@@ -782,6 +807,7 @@
     "deleteSuccess": "删除成功",
     "saveSuccess": "保存成功",
     "detail": "详情",
+    "total": "共",
     "keyAuthOnlyTip": "目前仅支持 Key Auth 认证",
     "authType": "认证方式"
   },

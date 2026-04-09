@@ -6,7 +6,7 @@ import { getProxyServers } from '@/services/proxy-server';
 import { MinusCircleOutlined, PlusOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import { AutoComplete, Button, Empty, Form, Input, InputNumber, Modal, Select, Switch, Tooltip, Typography } from 'antd';
 import { useRequest } from 'ice';
-import React, { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
+import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { aiModelProviders } from '../../configs';
 
@@ -28,6 +28,9 @@ const ProviderForm: React.FC = forwardRef((props: { value: any }, ref) => {
   const [openaiCustomServerType, setOpenaiCustomServerType] = useState<string | null>();
   const [qwenServerType, setQwenServerType] = useState<string | null>();
   const [providerConfig, setProviderConfig] = useState<object | null>();
+  // Preserve rawConfigs fields that have no corresponding form control (e.g. fields
+  // set directly via API). They are merged back on submit so UI edits don't erase them.
+  const originalRawConfigsRef = useRef<Record<string, any>>({});
   const [proxyServerOptions, setProxyServerOptions] = useState<OptionItem[] | null>();
   const proxyServersResult = useRequest(getProxyServers, {
     manual: true,
@@ -86,6 +89,7 @@ const ProviderForm: React.FC = forwardRef((props: { value: any }, ref) => {
     if (serviceOptions == null) {
       serviceResult.run();
     }
+    originalRawConfigsRef.current = {}
     if (props.value) {
       const {
         name,
@@ -96,6 +100,7 @@ const ProviderForm: React.FC = forwardRef((props: { value: any }, ref) => {
         proxyName = '',
         rawConfigs = {},
       } = props.value;
+      originalRawConfigsRef.current = rawConfigs || {};
       const {
         failureThreshold,
         successThreshold,
@@ -152,6 +157,17 @@ const ProviderForm: React.FC = forwardRef((props: { value: any }, ref) => {
         onOpenaiServerTypeChanged(openaiServerTypeValue)
         form.setFieldValue('openaiCustomServerType', openaiCustomServerTypeValue);
         onOpenaiCustomServerTypeChanged(openaiCustomServerTypeValue);
+      } else if (type === 'vllm') {
+        rawConfigs.vllmCustomUrls = [];
+        if (rawConfigs && rawConfigs.vllmCustomUrl) {
+          rawConfigs.vllmCustomUrls.push(rawConfigs.vllmCustomUrl);
+          if (Array.isArray(rawConfigs.vllmExtraCustomUrls)) {
+            rawConfigs.vllmCustomUrls.push(...rawConfigs.vllmExtraCustomUrls);
+          }
+        }
+        if (rawConfigs.vllmCustomUrls.length === 0) {
+          rawConfigs.vllmCustomUrls.push('');
+        }
       }
 
       if (type === 'qwen') {
@@ -215,7 +231,9 @@ const ProviderForm: React.FC = forwardRef((props: { value: any }, ref) => {
           healthCheckModel: values.healthCheckModel,
         },
         proxyName: values.proxyName,
-        rawConfigs: values.rawConfigs,
+        // Merge unknown extra fields (set via API, not exposed in the form) back into
+        // rawConfigs so they are not silently dropped when the user saves via the UI.
+        rawConfigs: { ...originalRawConfigsRef.current, ...(values.rawConfigs || {}) },
       };
 
       return result;
@@ -304,6 +322,14 @@ const ProviderForm: React.FC = forwardRef((props: { value: any }, ref) => {
           {
             required: true,
             message: t('llmProvider.providerForm.rules.serviceNameRequired'),
+          },
+          {
+            validator: (_, value) => {
+              if (value && value.includes('/')) {
+                return Promise.reject('name is invalid: slashes (/) are not allowed.');
+              }
+              return Promise.resolve();
+            },
           },
         ]}
       >
@@ -612,7 +638,7 @@ const ProviderForm: React.FC = forwardRef((props: { value: any }, ref) => {
               tooltip={t('llmProvider.providerForm.tooltips.qwenEnableCompatibleTooltip')}
               name={["rawConfigs", "qwenEnableCompatible"]}
               valuePropName="checked"
-              initialValue={false}
+              initialValue
             >
               <Switch />
             </Form.Item>
@@ -741,6 +767,61 @@ const ProviderForm: React.FC = forwardRef((props: { value: any }, ref) => {
                 type="url"
                 placeholder={t('llmProvider.providerForm.placeholder.azureServiceUrlPlaceholder')}
               />
+            </Form.Item>
+          </>
+        )
+      }
+
+      {
+        providerType === 'zhipuai' && (
+          <>
+            <Form.Item
+              label={t('llmProvider.providerForm.label.zhipuDomain')}
+              tooltip={t('llmProvider.providerForm.tooltips.zhipuDomainTooltip')}
+              name={["rawConfigs", "zhipuDomain"]}
+            >
+              <Input
+                allowClear
+                maxLength={256}
+                placeholder={t('llmProvider.providerForm.placeholder.zhipuDomainPlaceholder') || ''}
+              />
+            </Form.Item>
+            <Form.Item
+              label={t('llmProvider.providerForm.label.zhipuCodePlanMode')}
+              tooltip={t('llmProvider.providerForm.tooltips.zhipuCodePlanModeTooltip')}
+              name={["rawConfigs", "zhipuCodePlanMode"]}
+              valuePropName="checked"
+              initialValue
+            >
+              <Switch />
+            </Form.Item>
+          </>
+        )
+      }
+
+      {
+        providerType === 'claude' && (
+          <>
+            <Form.Item
+              label={t('llmProvider.providerForm.label.claudeVersion')}
+              tooltip={t('llmProvider.providerForm.tooltips.claudeVersionTooltip')}
+              name={["rawConfigs", "claudeVersion"]}
+              initialValue="2023-06-01"
+            >
+              <Input
+                allowClear
+                maxLength={64}
+                placeholder="2023-06-01"
+              />
+            </Form.Item>
+            <Form.Item
+              label={t('llmProvider.providerForm.label.claudeCodeMode')}
+              tooltip={t('llmProvider.providerForm.tooltips.claudeCodeModeTooltip')}
+              name={["rawConfigs", "claudeCodeMode"]}
+              valuePropName="checked"
+              initialValue={false}
+            >
+              <Switch />
             </Form.Item>
           </>
         )
@@ -1033,6 +1114,105 @@ const ProviderForm: React.FC = forwardRef((props: { value: any }, ref) => {
                 }
               </Form.List>
             </Form.Item>
+          </>
+        )
+      }
+
+      {
+        providerType === 'vllm' && (
+          <>
+            <Form.List
+              name={["rawConfigs", "vllmCustomUrls"]}
+              initialValue={[null]}
+              rules={[
+                {
+                  validator(rule, value) {
+                    let protocol = '';
+                    let contextPath = '';
+                    for (const item of value) {
+                      if (!item) {
+                        continue;
+                      }
+                      let url;
+                      try {
+                        url = new URL(item);
+                      } catch (e) {
+                        return Promise.reject(t('llmProvider.providerForm.rules.invalidVllmCustomUrl') + item)
+                      }
+                      if (value.length > 1
+                        && !/^(\b25[0-5]|\b2[0-4][0-9]|\b[01]?[0-9][0-9]?)(\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)){3}$/.test(url.hostname)) {
+                        return Promise.reject(t('llmProvider.providerForm.rules.vllmCustomUrlMultipleValuesWithIpOnly'))
+                      }
+                      if (protocol && url.protocol !== protocol) {
+                        return Promise.reject(t('llmProvider.providerForm.rules.vllmCustomUrlInconsistentProtocols'))
+                      }
+                      protocol = url.protocol;
+                      if (contextPath && url.pathname !== contextPath) {
+                        return Promise.reject(t('llmProvider.providerForm.rules.vllmCustomUrlInconsistentContextPaths'))
+                      }
+                      contextPath = url.pathname;
+                    }
+                    return Promise.resolve();
+                  },
+                },
+              ]}
+            >
+              {(fields, { add, remove }, { errors }) => (
+                <>
+                  {!fields.length ?
+                    <div
+                      style={{ marginBottom: '8px' }}
+                    >
+                      {t('llmProvider.providerForm.label.vllmCustomUrl')}
+                    </div> : null
+                  }
+
+                  {fields.map((field, index) => (
+                    <Form.Item
+                      label={index === 0 ? t('llmProvider.providerForm.label.vllmCustomUrl') : ''}
+                      required
+                      key={index}
+                      style={{ marginBottom: '0.5rem' }}
+                    >
+                      <Form.Item
+                        {...field}
+                        noStyle
+                        rules={[
+                          {
+                            required: true,
+                            pattern: /http(s)?:\/\/.+/,
+                            message: t('llmProvider.providerForm.rules.vllmCustomUrlRequired') || '',
+                          },
+                        ]}
+                      >
+                        <Input
+                          allowClear
+                          type="url"
+                          style={{ width: '94%' }}
+                          placeholder={t('llmProvider.providerForm.placeholder.vllmCustomUrlPlaceholder') || ''}
+                        />
+                      </Form.Item>
+                      <div style={{ display: "inline-block", width: '6%', textAlign: 'right' }}>
+                        <Button
+                          type="dashed"
+                          disabled={!(fields.length > 1)}
+                          onClick={() => remove(field.name)}
+                          icon={<MinusCircleOutlined />}
+                        />
+                      </div>
+                    </Form.Item>
+                  ))}
+                  <Form.Item>
+                    <Button
+                      type="dashed"
+                      onClick={() => add()}
+                      icon={<PlusOutlined />}
+                    />
+                    <Form.ErrorList errors={errors} />
+                  </Form.Item>
+                </>
+              )}
+            </Form.List>
           </>
         )
       }
