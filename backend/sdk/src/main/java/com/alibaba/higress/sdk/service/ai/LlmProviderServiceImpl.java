@@ -31,6 +31,8 @@ import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.collections4.MapUtils;
 import org.apache.commons.lang3.StringUtils;
 
+import com.alibaba.higress.sdk.constant.CommonKey;
+import com.alibaba.higress.sdk.constant.HigressConstants;
 import com.alibaba.higress.sdk.constant.plugin.BuiltInPluginName;
 import com.alibaba.higress.sdk.exception.ValidationException;
 import com.alibaba.higress.sdk.model.CommonPageQuery;
@@ -178,26 +180,6 @@ public class LlmProviderServiceImpl implements LlmProviderService {
 
         UpstreamService upstreamService = handler.buildUpstreamService(provider.getName(), providerConfig);
 
-        WasmPluginInstance existedServiceInstance = instances.stream()
-            .filter(i -> i.hasScopedTarget(WasmPluginInstanceScope.SERVICE, upstreamService.getName())).findFirst()
-            .orElse(null);
-        if (existedServiceInstance != null) {
-            String boundProviderName =
-                MapUtils.getString(existedServiceInstance.getConfigurations(), ACTIVE_PROVIDER_ID);
-            if (!provider.getName().equals(boundProviderName)) {
-                throw new ValidationException("The service instance for provider " + boundProviderName
-                    + " is already existed. Cannot bind it to provider " + provider.getName());
-            }
-        }
-
-        WasmPluginInstance serviceInstance = new WasmPluginInstance();
-        serviceInstance.setPluginName(instance.getPluginName());
-        serviceInstance.setPluginVersion(instance.getPluginVersion());
-        serviceInstance.setTarget(WasmPluginInstanceScope.SERVICE, upstreamService.getName());
-        serviceInstance.setEnabled(true);
-        serviceInstance.setInternal(true);
-        serviceInstance.setConfigurations(MapUtil.of(ACTIVE_PROVIDER_ID, provider.getName()));
-
         // Perform all the updates here just to avoid possible errors in resource building.
         if (!serviceSources.isEmpty()) {
             for (ServiceSource serviceSource : serviceSources) {
@@ -206,7 +188,50 @@ public class LlmProviderServiceImpl implements LlmProviderService {
             }
         }
         wasmPluginInstanceService.addOrUpdate(instance);
-        wasmPluginInstanceService.addOrUpdate(serviceInstance);
+
+        // search all Providers related AiRoutes
+        List<String> relatedRouteNames = getRelatedRouteNames(provider.getName());
+
+        if (relatedRouteNames.isEmpty()) {
+
+            // annotate this because Midea let us create same service for different AiProviders
+//            WasmPluginInstance existedServiceInstance = instances.stream()
+//                .filter(i -> i.hasScopedTarget(WasmPluginInstanceScope.SERVICE, upstreamService.getName())).findFirst()
+//                .orElse(null);
+//            if (existedServiceInstance != null) {
+//                String boundProviderName =
+//                    MapUtils.getString(existedServiceInstance.getConfigurations(), ACTIVE_PROVIDER_ID);
+//                if (!provider.getName().equals(boundProviderName)) {
+//                    throw new ValidationException("The service instance for provider " + boundProviderName
+//                        + " is already existed. Cannot bind it to provider " + provider.getName());
+//                }
+//            }
+
+            // if there is no matched rules,keep original SERVICE  matchRule(compatible with original logic)
+            WasmPluginInstance serviceInstance = new WasmPluginInstance();
+            serviceInstance.setPluginName(instance.getPluginName());
+            serviceInstance.setPluginVersion(instance.getPluginVersion());
+            serviceInstance.setTarget(WasmPluginInstanceScope.SERVICE, upstreamService.getName());
+            serviceInstance.setEnabled(true);
+            serviceInstance.setInternal(true);
+            serviceInstance.setConfigurations(MapUtil.of(ACTIVE_PROVIDER_ID, provider.getName()));
+            wasmPluginInstanceService.addOrUpdate(serviceInstance);
+        } else {
+            // when there is provider related routes,we create ROUTE + SERVICE match rule combinations to avoid "service" conflict
+            for (String routeName : relatedRouteNames) {
+                WasmPluginInstance routeServiceInstance = new WasmPluginInstance();
+                routeServiceInstance.setPluginName(instance.getPluginName());
+                routeServiceInstance.setPluginVersion(instance.getPluginVersion());
+                routeServiceInstance.setTargets(MapUtil.of(
+                    WasmPluginInstanceScope.ROUTE, routeName,
+                    WasmPluginInstanceScope.SERVICE, upstreamService.getName()));
+                routeServiceInstance.setEnabled(true);
+                routeServiceInstance.setInternal(true);
+                routeServiceInstance.setConfigurations(MapUtil.of(ACTIVE_PROVIDER_ID, provider.getName()));
+                wasmPluginInstanceService.addOrUpdate(routeServiceInstance);
+            }
+            
+        }
 
         if (handler.needSyncRouteAfterUpdate()) {
             syncRelatedAiRoutes(provider);
@@ -276,8 +301,17 @@ public class LlmProviderServiceImpl implements LlmProviderService {
             LlmProviderHandler handler = PROVIDER_HANDLERS.get((String)type);
             if (handler != null) {
                 UpstreamService upstreamService = handler.buildUpstreamService(providerName, deletedProvider);
+                // delete pure service matchRule
                 wasmPluginInstanceService.delete(WasmPluginInstanceScope.SERVICE, upstreamService.getName(),
                     BuiltInPluginName.AI_PROXY, true);
+                // delete ROUTE + SERVICE  matchRule
+                List<String> relatedRouteNames = getRelatedRouteNames(providerName);
+                for (String routeName : relatedRouteNames) {
+                    Map<WasmPluginInstanceScope, String> targets = MapUtil.of(
+                        WasmPluginInstanceScope.ROUTE, routeName,
+                        WasmPluginInstanceScope.SERVICE, upstreamService.getName());
+                    wasmPluginInstanceService.delete(targets, BuiltInPluginName.AI_PROXY, true);
+                }
 
                 ServiceSource serviceSource = handler.buildServiceSource(providerName, deletedProvider);
                 if (serviceSource != null) {
@@ -336,6 +370,34 @@ public class LlmProviderServiceImpl implements LlmProviderService {
                 aiRouteService.update(aiRoute);
             }
         }
+    }
+
+    /**
+     * search all Provider related AiRoute's Routing resources' names
+     * routine resource name's format is consistent with AiRouteServiceImpl.buildRouteResourceName()
+     */
+    private List<String> getRelatedRouteNames(String providerName) {
+        List<String> routeNames = new ArrayList<>();
+        AiRouteService aiRouteService = this.aiRouteService;
+        if (aiRouteService == null) {
+            return routeNames;
+        }
+        PaginatedResult<AiRoute> allRoutes = aiRouteService.list(new CommonPageQuery());
+        if (allRoutes == null || CollectionUtils.isEmpty(allRoutes.getData())) {
+            return routeNames;
+        }
+        for (AiRoute route : allRoutes.getData()) {
+            if (CollectionUtils.isEmpty(route.getUpstreams())) {
+                continue;
+            }
+            boolean hasProvider = route.getUpstreams().stream()
+                .anyMatch(u -> providerName.equals(u.getProvider()));
+            if (hasProvider) {
+                routeNames.add(CommonKey.AI_ROUTE_PREFIX + route.getName()
+                    + HigressConstants.INTERNAL_RESOURCE_NAME_SUFFIX);
+            }
+        }
+        return routeNames;
     }
 
     private static boolean hasProvider(List<AiUpstream> upstreams, String providerName) {
