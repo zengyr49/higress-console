@@ -28,6 +28,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -38,9 +39,15 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.alibaba.higress.sdk.constant.CommonKey;
+import com.alibaba.higress.sdk.constant.HigressConstants;
 import com.alibaba.higress.sdk.constant.plugin.BuiltInPluginName;
+import com.alibaba.higress.sdk.model.CommonPageQuery;
+import com.alibaba.higress.sdk.model.PaginatedResult;
 import com.alibaba.higress.sdk.model.WasmPluginInstance;
 import com.alibaba.higress.sdk.model.WasmPluginInstanceScope;
+import com.alibaba.higress.sdk.model.ai.AiRoute;
+import com.alibaba.higress.sdk.model.ai.AiUpstream;
 import com.alibaba.higress.sdk.model.ai.LlmProvider;
 import com.alibaba.higress.sdk.model.ai.LlmProviderProtocol;
 import com.alibaba.higress.sdk.model.ai.LlmProviderType;
@@ -58,6 +65,7 @@ class LlmProviderServiceTest {
 
     private ServiceSourceService serviceSourceService;
     private WasmPluginInstanceService wasmPluginInstanceService;
+    private AiRouteService aiRouteService;
     private LlmProviderServiceImpl service;
     private AtomicReference<WasmPluginInstance> globalInstanceRef;
 
@@ -65,7 +73,9 @@ class LlmProviderServiceTest {
     void setUp() {
         serviceSourceService = mock(ServiceSourceService.class);
         wasmPluginInstanceService = mock(WasmPluginInstanceService.class);
+        aiRouteService = mock(AiRouteService.class);
         service = new LlmProviderServiceImpl(serviceSourceService, wasmPluginInstanceService);
+        service.setAiRouteService(aiRouteService);
         globalInstanceRef = new AtomicReference<>();
 
         when(wasmPluginInstanceService.query(eq(WasmPluginInstanceScope.GLOBAL), isNull(),
@@ -84,6 +94,10 @@ class LlmProviderServiceTest {
     @Test
     @SuppressWarnings("unchecked")
     void addOrUpdateShouldPersistOriginalProtocolForNewProvider() {
+        // Mock empty route list to avoid syncRelatedAiRoutes triggering
+        when(aiRouteService.list(any(CommonPageQuery.class)))
+            .thenReturn(PaginatedResult.createFromFullList(new ArrayList<>(), new CommonPageQuery()));
+
         LlmProvider provider = createOpenaiProvider(LlmProviderProtocol.ORIGINAL.getValue());
 
         LlmProvider result = service.addOrUpdate(provider);
@@ -108,6 +122,10 @@ class LlmProviderServiceTest {
     @Test
     @SuppressWarnings("unchecked")
     void addOrUpdateShouldOverwriteProtocolWhenUpdatingProvider() {
+        // Mock empty route list to avoid syncRelatedAiRoutes triggering
+        when(aiRouteService.list(any(CommonPageQuery.class)))
+            .thenReturn(PaginatedResult.createFromFullList(new ArrayList<>(), new CommonPageQuery()));
+
         List<Map<String, Object>> existingProviders = new ArrayList<>();
         Map<String, Object> existingProvider = new HashMap<>();
         existingProvider.put(PROVIDER_ID, PROVIDER_NAME);
@@ -135,6 +153,39 @@ class LlmProviderServiceTest {
         assertTrue(providerConfig.containsKey(PROTOCOL));
         assertEquals(LlmProviderProtocol.ORIGINAL.getValue(), result.getProtocol());
         assertEquals(LlmProviderProtocol.ORIGINAL.getPluginValue(), result.getRawConfigs().get(PROTOCOL));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void addOrUpdateShouldCleanupOrphanedMatchRulesWhenRouteProviderHasRelatedRoutes() {
+        // This test verifies that when updating a provider that has related routes,
+        // any existing ROUTE+SERVICE matchRules for those routes are cleaned up first
+        // before new ones are created. This prevents orphaned matchRules when the
+        // provider's service configuration changes.
+
+        // Create an AiRoute that uses this provider
+        AiRoute aiRoute = new AiRoute();
+        aiRoute.setName("test-route");
+        AiUpstream upstream = new AiUpstream();
+        upstream.setProvider(PROVIDER_NAME);
+        aiRoute.setUpstreams(Collections.singletonList(upstream));
+
+        // Mock aiRouteService.list() to return the route that uses this provider
+        when(aiRouteService.list(any(CommonPageQuery.class)))
+            .thenReturn(PaginatedResult.createFromFullList(Collections.singletonList(aiRoute), new CommonPageQuery()));
+
+        // Create the provider with custom service
+        LlmProvider provider = createOpenaiProvider(LlmProviderProtocol.OPENAI_V1.getValue());
+
+        // Perform addOrUpdate - this should trigger cleanup of old matchRules
+        service.addOrUpdate(provider);
+
+        // The route resource name should be: AI_ROUTE_PREFIX + routeName + INTERNAL_RESOURCE_NAME_SUFFIX
+        String routeResourceName = CommonKey.AI_ROUTE_PREFIX + "test-route" + HigressConstants.INTERNAL_RESOURCE_NAME_SUFFIX;
+
+        // Verify that deleteAll is called on wasmPluginInstanceService to clean up old matchRules
+        // BEFORE the new matchRule is created. This is the key verification for the bug fix.
+        verify(wasmPluginInstanceService).deleteAll(eq(WasmPluginInstanceScope.ROUTE), eq(routeResourceName));
     }
 
     private static LlmProvider createOpenaiProvider(String protocol) {
