@@ -858,6 +858,23 @@ public class KubernetesModelConverter {
                 continue;
             }
 
+            // Exact scope match: rule must not have extra non-empty scopes beyond what targets specifies.
+            // This prevents deleting a ROUTE+SERVICE rule when only SERVICE is targeted.
+            for (WasmPluginInstanceScope scope : WasmPluginInstanceScope.NON_GLOBAL_SCOPES) {
+                if (targets.containsKey(scope)) {
+                    continue;
+                }
+                List<String> targetsInRule = getTargetsByScope(rule, scope);
+                if (CollectionUtils.isNotEmpty(targetsInRule)) {
+                    matches = false;
+                    break;
+                }
+            }
+
+            if (!matches) {
+                continue;
+            }
+
             boolean removeRule = false;
 
             for (Map.Entry<WasmPluginInstanceScope, String> entry : targets.entrySet()) {

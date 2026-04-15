@@ -230,7 +230,10 @@ public class LlmProviderServiceImpl implements LlmProviderService {
                 routeServiceInstance.setConfigurations(MapUtil.of(ACTIVE_PROVIDER_ID, provider.getName()));
                 wasmPluginInstanceService.addOrUpdate(routeServiceInstance);
             }
-            
+            // Clean up old pure SERVICE dimension matchRule (if exists)
+            wasmPluginInstanceService.delete(
+                WasmPluginInstanceScope.SERVICE, upstreamService.getName(),
+                BuiltInPluginName.AI_PROXY, true);
         }
 
         if (handler.needSyncRouteAfterUpdate()) {

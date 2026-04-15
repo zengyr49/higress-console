@@ -1464,6 +1464,41 @@ public class KubernetesModelConverterTest {
     }
 
     @Test
+    void removeWasmPluginInstanceFromCrTestServiceScopeShouldNotRemoveRouteServiceRule() {
+        // Regression test: deleting a pure SERVICE matchRule must NOT delete a ROUTE+SERVICE matchRule
+        // that happens to reference the same service. This was the root cause of matchRules being
+        // wiped out after creating an AiRoute when a provider already had a SERVICE matchRule.
+        V1alpha1WasmPlugin cr = new V1alpha1WasmPlugin();
+        V1alpha1WasmPluginSpec spec = new V1alpha1WasmPluginSpec();
+        List<MatchRule> matchRules = new ArrayList<>();
+
+        // Pure SERVICE rule (the one we want to delete)
+        MatchRule serviceRule = new MatchRule();
+        serviceRule.setService(new ArrayList<>(Collections.singletonList("llm-openai.dns")));
+        matchRules.add(serviceRule);
+
+        // ROUTE+SERVICE rule (must survive the delete)
+        MatchRule routeServiceRule = new MatchRule();
+        routeServiceRule.setIngress(new ArrayList<>(Collections.singletonList("ai-route-my-route-internal")));
+        routeServiceRule.setService(new ArrayList<>(Collections.singletonList("llm-openai.dns")));
+        matchRules.add(routeServiceRule);
+
+        spec.setMatchRules(matchRules);
+        cr.setSpec(spec);
+
+        boolean result = converter.removeWasmPluginInstanceFromCr(cr, WasmPluginInstanceScope.SERVICE, "llm-openai.dns");
+
+        Assertions.assertTrue(result);
+        // Only the pure SERVICE rule should be removed; the ROUTE+SERVICE rule must remain
+        Assertions.assertEquals(1, cr.getSpec().getMatchRules().size());
+        MatchRule remaining = cr.getSpec().getMatchRules().get(0);
+        Assertions.assertNotNull(remaining.getIngress());
+        Assertions.assertTrue(remaining.getIngress().contains("ai-route-my-route-internal"));
+        Assertions.assertNotNull(remaining.getService());
+        Assertions.assertTrue(remaining.getService().contains("llm-openai.dns"));
+    }
+
+    @Test
     public void v1RegistryConfig2ServiceSourceTestNacosType() {
         V1RegistryConfig v1RegistryConfig = new V1RegistryConfig();
         v1RegistryConfig.setType(V1McpBridge.REGISTRY_TYPE_NACOS);
