@@ -52,7 +52,9 @@ import com.alibaba.higress.sdk.service.kubernetes.crd.mcp.V1McpBridge;
 import com.alibaba.higress.sdk.util.MapUtil;
 
 import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @SuppressWarnings("unchecked")
 public class LlmProviderServiceImpl implements LlmProviderService {
 
@@ -104,6 +106,7 @@ public class LlmProviderServiceImpl implements LlmProviderService {
 
     @Override
     public LlmProvider addOrUpdate(LlmProvider provider) {
+        long t0 = System.currentTimeMillis();
         LlmProviderHandler handler = PROVIDER_HANDLERS.get(provider.getType());
         if (handler == null) {
             throw new ValidationException("Provider type " + provider.getType() + " is not supported");
@@ -119,6 +122,7 @@ public class LlmProviderServiceImpl implements LlmProviderService {
         fillDefaultValues(provider);
 
         List<WasmPluginInstance> instances = wasmPluginInstanceService.list(BuiltInPluginName.AI_PROXY, true);
+        log.info("[addOrUpdate] [{}] list AI_PROXY instances: {}ms", provider.getName(), System.currentTimeMillis() - t0);
 
         final String pluginName = BuiltInPluginName.AI_PROXY;
         WasmPluginInstance instance =
@@ -187,27 +191,16 @@ public class LlmProviderServiceImpl implements LlmProviderService {
                 serviceSourceService.addOrUpdate(serviceSource);
             }
         }
+        long t1 = System.currentTimeMillis();
         wasmPluginInstanceService.addOrUpdate(instance);
+        log.info("[addOrUpdate] [{}] save global instance: {}ms", provider.getName(), System.currentTimeMillis() - t1);
 
         // search all Providers related AiRoutes
+        long t2 = System.currentTimeMillis();
         List<String> relatedRouteNames = getRelatedRouteNames(provider.getName());
+        log.info("[addOrUpdate] [{}] getRelatedRouteNames ({}): {}ms", provider.getName(), relatedRouteNames.size(), System.currentTimeMillis() - t2);
 
         if (relatedRouteNames.isEmpty()) {
-
-            // annotate this because Midea let us create same service for different AiProviders
-//            WasmPluginInstance existedServiceInstance = instances.stream()
-//                .filter(i -> i.hasScopedTarget(WasmPluginInstanceScope.SERVICE, upstreamService.getName())).findFirst()
-//                .orElse(null);
-//            if (existedServiceInstance != null) {
-//                String boundProviderName =
-//                    MapUtils.getString(existedServiceInstance.getConfigurations(), ACTIVE_PROVIDER_ID);
-//                if (!provider.getName().equals(boundProviderName)) {
-//                    throw new ValidationException("The service instance for provider " + boundProviderName
-//                        + " is already existed. Cannot bind it to provider " + provider.getName());
-//                }
-//            }
-
-            // if there is no matched rules,keep original SERVICE  matchRule(compatible with original logic)
             WasmPluginInstance serviceInstance = new WasmPluginInstance();
             serviceInstance.setPluginName(instance.getPluginName());
             serviceInstance.setPluginVersion(instance.getPluginVersion());
@@ -215,9 +208,10 @@ public class LlmProviderServiceImpl implements LlmProviderService {
             serviceInstance.setEnabled(true);
             serviceInstance.setInternal(true);
             serviceInstance.setConfigurations(MapUtil.of(ACTIVE_PROVIDER_ID, provider.getName()));
+            long t3 = System.currentTimeMillis();
             wasmPluginInstanceService.addOrUpdate(serviceInstance);
+            log.info("[addOrUpdate] [{}] save SERVICE instance: {}ms", provider.getName(), System.currentTimeMillis() - t3);
         } else {
-            // when there is provider related routes,we create ROUTE + SERVICE match rule combinations to avoid "service" conflict
             for (String routeName : relatedRouteNames) {
                 WasmPluginInstance routeServiceInstance = new WasmPluginInstance();
                 routeServiceInstance.setPluginName(instance.getPluginName());
@@ -228,19 +222,28 @@ public class LlmProviderServiceImpl implements LlmProviderService {
                 routeServiceInstance.setEnabled(true);
                 routeServiceInstance.setInternal(true);
                 routeServiceInstance.setConfigurations(MapUtil.of(ACTIVE_PROVIDER_ID, provider.getName()));
+                long t3 = System.currentTimeMillis();
                 wasmPluginInstanceService.addOrUpdate(routeServiceInstance);
+                log.info("[addOrUpdate] [{}] save ROUTE+SERVICE instance ({}): {}ms", provider.getName(), routeName, System.currentTimeMillis() - t3);
             }
-            // Clean up old pure SERVICE dimension matchRule (if exists)
+            long t4 = System.currentTimeMillis();
             wasmPluginInstanceService.delete(
                 WasmPluginInstanceScope.SERVICE, upstreamService.getName(),
                 BuiltInPluginName.AI_PROXY, true);
+            log.info("[addOrUpdate] [{}] delete SERVICE instance: {}ms", provider.getName(), System.currentTimeMillis() - t4);
         }
 
         if (handler.needSyncRouteAfterUpdate()) {
+            long t5 = System.currentTimeMillis();
             syncRelatedAiRoutes(provider);
+            log.info("[addOrUpdate] [{}] syncRelatedAiRoutes: {}ms", provider.getName(), System.currentTimeMillis() - t5);
         }
 
-        return query(provider.getName());
+        long t6 = System.currentTimeMillis();
+        LlmProvider result = query(provider.getName());
+        log.info("[addOrUpdate] [{}] final query: {}ms", provider.getName(), System.currentTimeMillis() - t6);
+        log.info("[addOrUpdate] [{}] total: {}ms", provider.getName(), System.currentTimeMillis() - t0);
+        return result;
     }
 
     @Override
@@ -370,7 +373,9 @@ public class LlmProviderServiceImpl implements LlmProviderService {
             if (hasProvider(aiRoute.getUpstreams(), providerName)
                 || aiRoute.getFallbackConfig() != null && Boolean.TRUE.equals(aiRoute.getFallbackConfig().getEnabled())
                     && hasProvider(aiRoute.getFallbackConfig().getUpstreams(), providerName)) {
-                aiRouteService.update(aiRoute);
+                // Use updateRouteResourcesOnly to avoid mutual recursion:
+                // update() → syncRelatedProviders → addOrUpdate → syncRelatedAiRoutes → update() → ...
+                aiRouteService.updateRouteResourcesOnly(aiRoute);
             }
         }
     }

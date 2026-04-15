@@ -255,6 +255,13 @@ public class AiRouteServiceImpl implements AiRouteService {
         return configMap2AiRoute(updatedConfigMap);
     }
 
+    @Override
+    public void updateRouteResourcesOnly(AiRoute route) {
+        fillDefaultValues(route);
+        writeAiRouteResources(route);
+        writeAiRouteFallbackResources(route);
+    }
+
     private static Set<String> collectProviderNames(AiRoute route) {
         Set<String> names = new HashSet<>();
         if (route == null) {

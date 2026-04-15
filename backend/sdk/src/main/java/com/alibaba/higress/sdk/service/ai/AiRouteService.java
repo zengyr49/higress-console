@@ -27,4 +27,10 @@ public interface AiRouteService {
     void delete(String routeName);
 
     AiRoute update(AiRoute route);
+
+    /**
+     * Update only the route's internal resources (matchRules, etc.) without triggering provider sync.
+     * Used by LlmProviderService to avoid mutual recursion.
+     */
+    void updateRouteResourcesOnly(AiRoute route);
 }
