@@ -254,6 +254,48 @@ public class AiRouteServiceTest {
             eq(BuiltInPluginName.AI_PROXY), eq(true));
     }
 
+    /**
+     * Regression test: deleting an AiRoute must clean up its ROUTE+SERVICE matchRules in ai-proxy.internal.
+     */
+    @Test
+    public void deleteShouldCleanUpMatchRuleForBoundProvider() throws Exception {
+        KubernetesClientService k8sClient = mock(KubernetesClientService.class);
+        KubernetesModelConverter converter = mock(KubernetesModelConverter.class);
+        RouteService routeService = mock(RouteService.class);
+        LlmProviderService llmProviderService = mock(LlmProviderService.class);
+        WasmPluginInstanceService wasmPluginInstanceService = mock(WasmPluginInstanceService.class);
+
+        when(k8sClient.loadFromYaml(any(), eq(V1alpha3EnvoyFilter.class)))
+            .thenReturn(mock(V1alpha3EnvoyFilter.class));
+
+        AiRouteServiceImpl service = new AiRouteServiceImpl(
+            converter, k8sClient, routeService, llmProviderService, wasmPluginInstanceService);
+
+        AiRoute existingRoute = new AiRoute();
+        existingRoute.setName("airoute1");
+        AiUpstream upstream = new AiUpstream();
+        upstream.setProvider("provider1");
+        existingRoute.setUpstreams(Collections.singletonList(upstream));
+
+        String configMapName = "ai-route-airoute1";
+        when(converter.aiRouteName2ConfigMapName("airoute1")).thenReturn(configMapName);
+
+        V1ConfigMap configMap = buildConfigMap(configMapName, existingRoute);
+        when(k8sClient.readConfigMap(configMapName)).thenReturn(configMap);
+        when(converter.configMap2AiRoute(configMap)).thenReturn(existingRoute);
+
+        UpstreamService provider1Service = new UpstreamService();
+        provider1Service.setName("llm-provider1.dns");
+        when(llmProviderService.buildUpstreamService("provider1")).thenReturn(provider1Service);
+
+        service.delete("airoute1");
+
+        Map<WasmPluginInstanceScope, String> expectedTargets = MapUtil.of(
+            WasmPluginInstanceScope.ROUTE, "ai-route-airoute1.internal",
+            WasmPluginInstanceScope.SERVICE, "llm-provider1.dns");
+        verify(wasmPluginInstanceService).delete(eq(expectedTargets), eq(BuiltInPluginName.AI_PROXY), eq(true));
+    }
+
     private static V1ConfigMap buildConfigMap(String name, AiRoute route) {
         V1ConfigMap cm = new V1ConfigMap();
         V1ObjectMeta meta = new V1ObjectMeta();

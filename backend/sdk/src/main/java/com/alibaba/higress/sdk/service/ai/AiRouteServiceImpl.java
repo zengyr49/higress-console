@@ -178,6 +178,9 @@ public class AiRouteServiceImpl implements AiRouteService {
 
     @Override
     public void delete(String routeName) {
+        // Read the route before deleting so we can clean up its matchRules
+        AiRoute existingRoute = query(routeName);
+
         deleteAiRouteResources(routeName);
 
         String configMapName = kubernetesModelConverter.aiRouteName2ConfigMapName(routeName);
@@ -185,6 +188,23 @@ public class AiRouteServiceImpl implements AiRouteService {
             kubernetesClientService.deleteConfigMap(configMapName);
         } catch (ApiException e) {
             throw new BusinessException("Error occurs when deleting the ConfigMap with name: " + configMapName, e);
+        }
+
+        // Clean up ROUTE+SERVICE matchRules for all providers bound to this route
+        if (existingRoute != null) {
+            String routeResourceName = buildRouteResourceName(routeName);
+            for (String providerName : collectProviderNames(existingRoute)) {
+                try {
+                    UpstreamService upstreamService = llmProviderService.buildUpstreamService(providerName);
+                    Map<WasmPluginInstanceScope, String> targets = MapUtil.of(
+                        WasmPluginInstanceScope.ROUTE, routeResourceName,
+                        WasmPluginInstanceScope.SERVICE, upstreamService.getName());
+                    wasmPluginInstanceService.delete(targets, BuiltInPluginName.AI_PROXY, true);
+                } catch (Exception e) {
+                    log.warn("Failed to clean up matchRule for deleted route {} provider {}", routeName, providerName,
+                        e);
+                }
+            }
         }
     }
 
