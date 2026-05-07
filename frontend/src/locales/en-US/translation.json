@@ -76,7 +76,9 @@
         "serviceName": "Service Name",
         "serviceWeight": "Weight",
         "services": "Target Services",
-        "modelPredicates": "Model Match Rule"
+        "modelPredicates": "Model Match Rule",
+        "customConfigs": "Custom Annotations",
+        "customConfigsTip": "Click this \"?\" to view the configuration guide."
       },
       "rule": {
         "matchTypeRequired": "Please select a match type",
@@ -112,6 +114,7 @@
     "deleteConfirmation": "Are you sure you want to delete <1>{{currentRouteName}}</1>?",
     "authNotEnabled": "Not enabled",
     "authEnabledWithoutConsumer": "Nobody authorized",
+    "viewConsumers": "View Consumers",
     "usage": "Usage",
     "aiRouteUsage": "AI Route Usage",
     "aiRouteUsageContent": "You can send a test request using the command below:",
@@ -247,7 +250,7 @@
         "healthCheckInterval": "Health Check Request Interval (ms)",
         "healthCheckModel": "Health Check Request LLM Model",
         "healthCheckTimeout": "Health Check Request Timeout (ms)",
-        "protocol": "Request Procotol",
+        "protocol": "Request Protocol",
         "serviceName": "Service Name",
         "successThreshold": "Min Consecuitive Sucesses to Mark Up a Token",
         "azureServiceUrl": "Azure Service URL",
@@ -292,6 +295,8 @@
         "protocol": "Please select a request protocol",
         "successThresholdRequired": "Please input min consecuitive sucesses to mark up a token",
         "azureServiceUrlRequired": "Please input Azure service URL",
+        "azureServiceUrlMissingApiVersion": "Azure service URL must contain api-version query parameter and its value cannot be empty",
+        "azureServiceUrlInvalid": "Invalid Azure service URL format",
         "ollamaServerHostRequired": "Please input Ollama service host",
         "ollamaServerPortRequired": "Please input Ollama service port",
         "openaiCustomUrlRequired": "Please input a valid custom OpenAI service base URL",
@@ -399,6 +404,14 @@
       "targetRoute": "Target Route: ",
       "enableStatus": "Enabled",
       "globalConfigWarning": "Note: Configurations above will be applied to all domains the routes. Please edit with caution."
+    },
+    "readme": {
+      "tabTitle": "Documentation",
+      "empty": "No documentation available",
+      "loadError": "Failed to load online documentation",
+      "openOnline": "View online documentation",
+      "expandView": "Expand view",
+      "expandedTitle": "Documentation"
     },
     "builtIns": {
       "rewrite": {
@@ -705,7 +718,18 @@
       "customConfigsTip": "Click this \"?\" to view the configuration guide.",
       "targetService": "Target Service",
       "targetServiceRequired": "Please choose the target service.",
-      "targetServiceNamedPlaceholder": "Search target service by name. Multiple selections are allowed."
+      "targetServiceNamedPlaceholder": "Search target service by name. Multiple selections are allowed.",
+      "weightConfig": "Weight Configuration"
+    },
+    "weightTable": {
+      "serviceName": "Service Name",
+      "weight": "Weight (%)",
+      "action": "Action",
+      "delete": "Delete this service",
+      "equalDistribution": "Distribute Equally",
+      "sumLabel": "Sum: {{sum}}/100",
+      "invalidSum": "The sum of all weights is {{sum}}, must be 100",
+      "zeroWeightWarning": "This service has a weight of 0 and will not receive traffic"
     }
   },
   "system": {
