@@ -11,6 +11,14 @@ cd backend/console/target
     -jar higress-console.jar
 ```
 以上也可以放到application properties里面
+### 新增注意点，2.2.1以后，增强了鉴权限制，access-token要改为用下面这个方式获取.token有效期30天
+```shell
+kubectl --kubeconfig=/Users/zengyr7/Downloads/cls-en1 -n higress-for-wgb-uat \                                                                                                                                                   
+    create token a42a408ba116a44d1-higress-controller \                                                                                                                                                                            
+    --audience=istio-ca --duration=720h
+```
+
+
 ## 2、前端启动
 ```shell
 cd frontend

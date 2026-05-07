@@ -191,17 +191,17 @@ public class LlmProviderServiceImpl implements LlmProviderService {
         UpstreamService upstreamService = handler.buildUpstreamService(provider.getName(), providerConfig);
         String upstreamServiceName = upstreamService.getName();
 
-        WasmPluginInstance existedServiceInstance =
-            instances.stream().filter(i -> i.hasScopedTarget(WasmPluginInstanceScope.SERVICE, upstreamServiceName))
-                .findFirst().orElse(null);
-        if (existedServiceInstance != null) {
-            String boundProviderName =
-                MapUtils.getString(existedServiceInstance.getConfigurations(), ACTIVE_PROVIDER_ID);
-            if (!provider.getName().equals(boundProviderName)) {
-                throw new ValidationException("The service instance for provider " + boundProviderName
-                    + " is already existed. Cannot bind it to provider " + provider.getName());
-            }
-        }
+//        WasmPluginInstance existedServiceInstance =
+//            instances.stream().filter(i -> i.hasScopedTarget(WasmPluginInstanceScope.SERVICE, upstreamServiceName))
+//                .findFirst().orElse(null);
+//        if (existedServiceInstance != null) {
+//            String boundProviderName =
+//                MapUtils.getString(existedServiceInstance.getConfigurations(), ACTIVE_PROVIDER_ID);
+//            if (!provider.getName().equals(boundProviderName)) {
+//                throw new ValidationException("The service instance for provider " + boundProviderName
+//                    + " is already existed. Cannot bind it to provider " + provider.getName());
+//            }
+//        }
 
         boolean needNewServiceInstance = true;
         for (WasmPluginInstance instance : instances) {
@@ -246,8 +246,8 @@ public class LlmProviderServiceImpl implements LlmProviderService {
 
         if (relatedRouteNames.isEmpty()) {
             WasmPluginInstance serviceInstance = new WasmPluginInstance();
-            serviceInstance.setPluginName(instance.getPluginName());
-            serviceInstance.setPluginVersion(instance.getPluginVersion());
+            serviceInstance.setPluginName(globalInstance.getPluginName());
+            serviceInstance.setPluginVersion(globalInstance.getPluginVersion());
             serviceInstance.setTarget(WasmPluginInstanceScope.SERVICE, upstreamService.getName());
             serviceInstance.setEnabled(true);
             serviceInstance.setInternal(true);
@@ -258,8 +258,8 @@ public class LlmProviderServiceImpl implements LlmProviderService {
         } else {
             for (String routeName : relatedRouteNames) {
                 WasmPluginInstance routeServiceInstance = new WasmPluginInstance();
-                routeServiceInstance.setPluginName(instance.getPluginName());
-                routeServiceInstance.setPluginVersion(instance.getPluginVersion());
+                routeServiceInstance.setPluginName(globalInstance.getPluginName());
+                routeServiceInstance.setPluginVersion(globalInstance.getPluginVersion());
                 routeServiceInstance.setTargets(MapUtil.of(
                     WasmPluginInstanceScope.ROUTE, routeName,
                     WasmPluginInstanceScope.SERVICE, upstreamService.getName()));
